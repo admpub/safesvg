@@ -273,14 +273,20 @@ type Validator struct {
 // NewValidator creates a new validator with default whitelists
 func NewValidator() Validator {
 	vld := Validator{
-		whiteListElements:   svg_elements,
-		whiteListAttributes: svg_attributes,
+		whiteListElements:   map[string]struct{}{},
+		whiteListAttributes: map[string]struct{}{},
 		innerTextValidator: map[string]func([]byte) error{
 			`style`: ValidateStyle,
 		},
 		attrValueValidator: map[string]func(string) error{
 			`href`: validateHref,
 		},
+	}
+	for k, v := range svg_elements {
+		vld.whiteListElements[k] = v
+	}
+	for k, v := range svg_attributes {
+		vld.whiteListAttributes[k] = v
 	}
 	return vld
 }
@@ -393,13 +399,13 @@ func (vld *Validator) SetAttrValueValidator(attribute string, validate func(stri
 	return vld
 }
 
-func (vld *Validator) RemoveInnerTextValidator(element string, validate func([]byte) error) *Validator {
+func (vld *Validator) RemoveInnerTextValidator(element string) *Validator {
 	element = strings.ToLower(element)
 	delete(vld.innerTextValidator, element)
 	return vld
 }
 
-func (vld *Validator) RemoveAttrValueValidator(attribute string, validate func(string) error) *Validator {
+func (vld *Validator) RemoveAttrValueValidator(attribute string) *Validator {
 	attribute = strings.ToLower(attribute)
 	delete(vld.attrValueValidator, attribute)
 	return vld
@@ -426,7 +432,7 @@ func validateAttributes(attrs []xml.Attr, whiteListAttributes map[string]struct{
 		}
 		_, found := whiteListAttributes[key]
 		if !found {
-			return fmt.Errorf("%w: %s", ErrInvalidAttribute, attr.Name.Local)
+			return fmt.Errorf("%w: %s", ErrInvalidAttribute, key)
 		}
 		fn, ok := attrValueValidator[key]
 		if ok {
