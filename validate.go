@@ -51,29 +51,29 @@ var svg_elements = map[string]struct{}{
 	"use":                 {},
 	"view":                {},
 	"vkern":               {},
-	"feBlend":             {},
-	"feColorMatrix":       {},
-	"feComponentTransfer": {},
-	"feComposite":         {},
-	"feConvolveMatrix":    {},
-	"feDiffuseLighting":   {},
-	"feDisplacementMap":   {},
-	"feDistantLight":      {},
-	"feFlood":             {},
-	"feFuncA":             {},
-	"feFuncB":             {},
-	"feFuncG":             {},
-	"feFuncR":             {},
-	"feGaussianBlur":      {},
-	"feMerge":             {},
-	"feMergeNode":         {},
-	"feMorphology":        {},
-	"feOffset":            {},
-	"fePointLight":        {},
-	"feSpecularLighting":  {},
-	"feSpotLight":         {},
-	"feTile":              {},
-	"feTurbulence":        {},
+	"feblend":             {},
+	"fecolormatrix":       {},
+	"fecomponenttransfer": {},
+	"fecomposite":         {},
+	"feconvolvematrix":    {},
+	"fediffuselighting":   {},
+	"fedisplacementmap":   {},
+	"fedistantlight":      {},
+	"feflood":             {},
+	"fefunca":             {},
+	"fefuncb":             {},
+	"fefuncg":             {},
+	"fefuncr":             {},
+	"fegaussianblur":      {},
+	"femerge":             {},
+	"femergenode":         {},
+	"femorphology":        {},
+	"feoffset":            {},
+	"fepointlight":        {},
+	"fespecularlighting":  {},
+	"fespotlight":         {},
+	"fetile":              {},
+	"feturbulence":        {},
 }
 
 var svg_attributes = map[string]struct{}{
@@ -266,6 +266,8 @@ var svg_attributes = map[string]struct{}{
 type Validator struct {
 	whiteListElements   map[string]struct{}
 	whiteListAttributes map[string]struct{}
+	innerTextValidator  map[string]func([]byte) error
+	attrValueValidator  map[string]func(string) error
 }
 
 // NewValidator creates a new validator with default whitelists
@@ -273,6 +275,10 @@ func NewValidator() Validator {
 	vld := Validator{
 		whiteListElements:   svg_elements,
 		whiteListAttributes: svg_attributes,
+		innerTextValidator: map[string]func([]byte) error{
+			`style`: ValidateStyle,
+		},
+		attrValueValidator: map[string]func(string) error{},
 	}
 	return vld
 }
@@ -288,24 +294,34 @@ func (vld Validator) ValidateReader(r io.Reader) error {
 	t := xml.NewDecoder(r)
 	var to xml.Token
 	var err error
+	var elem string
 
 	for {
 		to, err = t.Token()
 
 		switch v := to.(type) {
 		case xml.StartElement:
-			if ok := validElements(v.Name.Local, vld.whiteListElements); !ok {
+			elem = strings.ToLower(v.Name.Local)
+			if ok := validElements(elem, vld.whiteListElements); !ok {
 				return errors.New("Invalid element " + v.Name.Local)
 			}
 
-			if err := validAttributes(v.Attr, vld.whiteListAttributes); err != nil {
+			if err := validAttributes(v.Attr, vld.whiteListAttributes, vld.attrValueValidator); err != nil {
 				return err
 			}
 		case xml.EndElement:
-			if ok := validElements(v.Name.Local, vld.whiteListElements); !ok {
+			elem = ``
+			if ok := validElements(strings.ToLower(v.Name.Local), vld.whiteListElements); !ok {
 				return errors.New("Invalid element " + v.Name.Local)
 			}
 		case xml.CharData: //text
+			if len(elem) > 0 {
+				if fn, ok := vld.innerTextValidator[elem]; ok {
+					if err := fn(v); err != nil {
+						return err
+					}
+				}
+			}
 
 		case xml.Comment:
 
@@ -316,11 +332,10 @@ func (vld Validator) ValidateReader(r io.Reader) error {
 		}
 
 		if err != nil {
-			if err.Error() == "EOF" {
+			if err == io.EOF || err.Error() == "EOF" {
 				break
-			} else {
-				return err
 			}
+			return err
 		}
 
 	}
@@ -329,37 +344,70 @@ func (vld Validator) ValidateReader(r io.Reader) error {
 }
 
 // WhitelistElements adds svg elements to the whitelist
-func (vld *Validator) WhitelistElements(elements ...string) {
+func (vld *Validator) WhitelistElements(elements ...string) *Validator {
 	for _, elemet := range elements {
+		elemet = strings.ToLower(elemet)
 		vld.whiteListElements[elemet] = struct{}{}
 	}
+	return vld
 }
 
 // WhitelistAttributes adds svg attributes to the whitelist
-func (vld *Validator) WhitelistAttributes(attributes ...string) {
+func (vld *Validator) WhitelistAttributes(attributes ...string) *Validator {
 	for _, attr := range attributes {
+		attr = strings.ToLower(attr)
 		vld.whiteListAttributes[attr] = struct{}{}
 	}
+	return vld
 }
 
 // BlacklistElements removes svg elements from the whitelist
-func (vld *Validator) BlacklistElements(elements ...string) {
+func (vld *Validator) BlacklistElements(elements ...string) *Validator {
 	for _, elemet := range elements {
+		elemet = strings.ToLower(elemet)
 		delete(vld.whiteListElements, elemet)
 	}
+	return vld
 }
 
 // BlacklistAttributes removes svg attributes from the whitelist
-func (vld *Validator) BlacklistAttributes(attributes ...string) {
+func (vld *Validator) BlacklistAttributes(attributes ...string) *Validator {
 	for _, attr := range attributes {
+		attr = strings.ToLower(attr)
 		delete(vld.whiteListAttributes, attr)
 	}
+	return vld
 }
 
-func validAttributes(attrs []xml.Attr, whiteListAttributes map[string]struct{}) error {
+func (vld *Validator) SetInnerTextValidator(element string, validate func([]byte) error) *Validator {
+	element = strings.ToLower(element)
+	vld.innerTextValidator[element] = validate
+	return vld
+}
+
+func (vld *Validator) SetAttrValueValidator(attribute string, validate func(string) error) *Validator {
+	attribute = strings.ToLower(attribute)
+	vld.attrValueValidator[attribute] = validate
+	return vld
+}
+
+func (vld *Validator) RemoveInnerTextValidator(element string, validate func([]byte) error) *Validator {
+	element = strings.ToLower(element)
+	delete(vld.innerTextValidator, element)
+	return vld
+}
+
+func (vld *Validator) RemoveAttrValueValidator(attribute string, validate func(string) error) *Validator {
+	attribute = strings.ToLower(attribute)
+	delete(vld.attrValueValidator, attribute)
+	return vld
+}
+
+func validAttributes(attrs []xml.Attr, whiteListAttributes map[string]struct{}, attrValueValidator map[string]func(string) error) error {
 	var key string
+	var err error
 	for _, attr := range attrs {
-		if attr.Name.Space != "" {
+		if len(attr.Name.Space) > 0 {
 			if attr.Name.Space == "http://www.w3.org/XML/1998/namespace" {
 				attr.Name.Space = "xml"
 			}
@@ -367,12 +415,19 @@ func validAttributes(attrs []xml.Attr, whiteListAttributes map[string]struct{}) 
 		} else {
 			key = attr.Name.Local
 		}
-		_, found := whiteListAttributes[strings.ToLower(key)]
+		key = strings.ToLower(key)
+		_, found := whiteListAttributes[key]
 		if !found {
 			return errors.New("Invalid attribute " + attr.Name.Local)
 		}
+		fn, ok := attrValueValidator[key]
+		if ok {
+			if err = fn(attr.Value); err != nil {
+				return err
+			}
+		}
 	}
-	return nil
+	return err
 }
 
 func validElements(elm string, whiteListElements map[string]struct{}) bool {
