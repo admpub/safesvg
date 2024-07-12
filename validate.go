@@ -278,7 +278,9 @@ func NewValidator() Validator {
 		innerTextValidator: map[string]func([]byte) error{
 			`style`: ValidateStyle,
 		},
-		attrValueValidator: map[string]func(string) error{},
+		attrValueValidator: map[string]func(string) error{
+			`href`: validateHref,
+		},
 	}
 	return vld
 }
@@ -302,16 +304,16 @@ func (vld Validator) ValidateReader(r io.Reader) error {
 		switch v := to.(type) {
 		case xml.StartElement:
 			elem = strings.ToLower(v.Name.Local)
-			if ok := validElements(elem, vld.whiteListElements); !ok {
+			if ok := validateElements(elem, vld.whiteListElements); !ok {
 				return fmt.Errorf("%w: %s", ErrInvalidElement, v.Name.Local)
 			}
 
-			if err := validAttributes(v.Attr, vld.whiteListAttributes, vld.attrValueValidator); err != nil {
+			if err := validateAttributes(v.Attr, vld.whiteListAttributes, vld.attrValueValidator); err != nil {
 				return err
 			}
 		case xml.EndElement:
 			elem = ``
-			if ok := validElements(strings.ToLower(v.Name.Local), vld.whiteListElements); !ok {
+			if ok := validateElements(strings.ToLower(v.Name.Local), vld.whiteListElements); !ok {
 				return fmt.Errorf("%w: %s", ErrInvalidElement, v.Name.Local)
 			}
 		case xml.CharData: //text
@@ -403,7 +405,7 @@ func (vld *Validator) RemoveAttrValueValidator(attribute string, validate func(s
 	return vld
 }
 
-func validAttributes(attrs []xml.Attr, whiteListAttributes map[string]struct{}, attrValueValidator map[string]func(string) error) error {
+func validateAttributes(attrs []xml.Attr, whiteListAttributes map[string]struct{}, attrValueValidator map[string]func(string) error) error {
 	var key string
 	var err error
 	for _, attr := range attrs {
@@ -411,26 +413,35 @@ func validAttributes(attrs []xml.Attr, whiteListAttributes map[string]struct{}, 
 			if attr.Name.Space == "http://www.w3.org/XML/1998/namespace" {
 				attr.Name.Space = "xml"
 			}
-			key = attr.Name.Space + ":" + attr.Name.Local
+			key = strings.ToLower(attr.Name.Local)
+			fn, ok := attrValueValidator[key]
+			if ok {
+				if err = fn(attr.Value); err != nil {
+					return err
+				}
+			}
+			key = strings.ToLower(attr.Name.Space) + ":" + key
 		} else {
-			key = attr.Name.Local
+			key = strings.ToLower(attr.Name.Local)
 		}
-		key = strings.ToLower(key)
 		_, found := whiteListAttributes[key]
 		if !found {
 			return fmt.Errorf("%w: %s", ErrInvalidAttribute, attr.Name.Local)
 		}
 		fn, ok := attrValueValidator[key]
 		if ok {
-			if err = fn(attr.Value); err != nil {
-				return err
-			}
+			err = fn(attr.Value)
+		} else {
+			err = validateAttrValue(attr.Value)
+		}
+		if err != nil {
+			return err
 		}
 	}
 	return err
 }
 
-func validElements(elm string, whiteListElements map[string]struct{}) bool {
+func validateElements(elm string, whiteListElements map[string]struct{}) bool {
 	_, found := whiteListElements[elm]
 	return found
 }
