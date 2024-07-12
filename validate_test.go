@@ -118,3 +118,40 @@ func Test_Style(t *testing.T) {
 		t.Errorf("Expected validation error, got none")
 	}
 }
+
+func Test_Entity(t *testing.T) {
+	svg := []byte(`<?xml version="1.0" standalone="yes"?>
+	<! DOCTYPE ernw [ <!ENTITY xxe SYSTEM "file:///etc/passwd" > ]>
+	<svg width="500px" height="100px" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1">
+	<text font-family="Verdana" font-size="16" x="10" y="40"><![CDATA[[&xxe;]]></text>
+	</svg>`)
+	v := NewValidator()
+	err := v.Validate(svg)
+	if err == nil {
+		t.Errorf("Expected validation error, got none")
+	}
+	svg = []byte(`<?xml version="1.0"?>
+<!DOCTYPE message [
+    <!ENTITY normal "hello">  <!-- 内部普通实体 -->
+    <!ENTITY normal SYSTEM "http://xml.org/hhh.dtd">  <!-- 外部普通实体 -->
+    <!-- <!ENTITY % para SYSTEM "file:///1234.dtd"> -->  <!-- 外部参数实体 -->
+    %para;            <!-- 引用参数实体 -->
+]>
+<svg><![CDATA[[&normal;]]></svg>`)
+	err = v.Validate(svg)
+	if err != nil {
+		t.Errorf("Unexptected error %v", err)
+	}
+	svg = []byte(`<?xml version="1.0"?>
+<!DOCTYPE message [
+    <!ENTITY normal "hello">  <!-- 内部普通实体 -->
+    <!ENTITY normal SYSTEM "http://xml.org/hhh.dtd">  <!-- 外部普通实体 -->
+    <!ENTITY % para SYSTEM "filE:///1234.dtd">  <!-- 外部参数实体 -->
+    %para;            <!-- 引用参数实体 -->
+]>
+<svg><![CDATA[[&normal;]]></svg>`)
+	err = v.Validate(svg)
+	if err == nil {
+		t.Errorf("Expected validation error, got none")
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 )
 
@@ -297,6 +298,11 @@ func (vld Validator) Validate(b []byte) error {
 	return vld.ValidateReader(r)
 }
 
+var (
+	entitySystemRegexp    = regexp.MustCompile(`(?i)<!ENTITY(?:.*)SYSTEM`)
+	entityLocalFileRegexp = regexp.MustCompile(`(?i)\b*file://`)
+)
+
 // ValidateReader validates svg data from an io.Reader interface
 func (vld Validator) ValidateReader(r io.Reader) error {
 	t := xml.NewDecoder(r)
@@ -336,7 +342,13 @@ func (vld Validator) ValidateReader(r io.Reader) error {
 		case xml.ProcInst:
 
 		case xml.Directive: //doctype etc
-
+			d := bytes.TrimSpace(v)
+			length := len(d)
+			if length > 8 && bytes.EqualFold(d[0:7], []byte(`DOCTYPE`)) {
+				if entitySystemRegexp.Match(d) && entityLocalFileRegexp.Match(d) {
+					return fmt.Errorf("%w: %s", ErrUnallowedEntityAttribute, d)
+				}
+			}
 		}
 
 		if err != nil {

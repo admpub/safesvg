@@ -8,4 +8,5 @@ var (
 	ErrUnallowedCSSAttributeValue  = errors.New("unallowed css attribute value")
 	ErrUnallowedCSSAttribute       = errors.New("unallowed css attribute")
 	ErrUnallowedHrefAttributeValue = errors.New("unallowed href attribute value")
+	ErrUnallowedEntityAttribute    = errors.New("unallowed entity attribute")
 )
