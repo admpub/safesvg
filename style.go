@@ -1,7 +1,7 @@
 package safesvg
 
 import (
-	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/gorilla/css/scanner"
@@ -24,14 +24,14 @@ func ValidateStyle(myCSS []byte) error {
 		switch token.Type {
 		case scanner.TokenURI:
 			if strings.Contains(token.Value, `//`) { // url(...)
-				return errors.New("Unallowed css attribute value " + token.Value)
+				return fmt.Errorf("%w: %s", ErrUnallowedCSSAttributeValue, token.Value)
 			}
 		case scanner.TokenAtKeyword:
 			if strings.EqualFold(token.Value, `@import`) {
-				return errors.New("Unallowed css attribute " + token.Value)
+				return fmt.Errorf("%w: %s", ErrUnallowedCSSAttribute, token.Value)
 			}
 		case scanner.TokenFunction: // expression(...) regex(...)
-			return errors.New("Unallowed css attribute value " + token.Value)
+			return fmt.Errorf("%w: %s", ErrUnallowedCSSAttributeValue, token.Value)
 		}
 	}
 	return err

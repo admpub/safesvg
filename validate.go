@@ -3,7 +3,7 @@ package safesvg
 import (
 	"bytes"
 	"encoding/xml"
-	"errors"
+	"fmt"
 	"io"
 	"strings"
 )
@@ -303,7 +303,7 @@ func (vld Validator) ValidateReader(r io.Reader) error {
 		case xml.StartElement:
 			elem = strings.ToLower(v.Name.Local)
 			if ok := validElements(elem, vld.whiteListElements); !ok {
-				return errors.New("Invalid element " + v.Name.Local)
+				return fmt.Errorf("%w: %s", ErrInvalidElement, v.Name.Local)
 			}
 
 			if err := validAttributes(v.Attr, vld.whiteListAttributes, vld.attrValueValidator); err != nil {
@@ -312,7 +312,7 @@ func (vld Validator) ValidateReader(r io.Reader) error {
 		case xml.EndElement:
 			elem = ``
 			if ok := validElements(strings.ToLower(v.Name.Local), vld.whiteListElements); !ok {
-				return errors.New("Invalid element " + v.Name.Local)
+				return fmt.Errorf("%w: %s", ErrInvalidElement, v.Name.Local)
 			}
 		case xml.CharData: //text
 			if len(elem) > 0 {
@@ -418,7 +418,7 @@ func validAttributes(attrs []xml.Attr, whiteListAttributes map[string]struct{}, 
 		key = strings.ToLower(key)
 		_, found := whiteListAttributes[key]
 		if !found {
-			return errors.New("Invalid attribute " + attr.Name.Local)
+			return fmt.Errorf("%w: %s", ErrInvalidAttribute, attr.Name.Local)
 		}
 		fn, ok := attrValueValidator[key]
 		if ok {
