@@ -1,4 +1,4 @@
-package safesvg
+package svgminify
 
 import (
 	"io"

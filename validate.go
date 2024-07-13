@@ -92,6 +92,9 @@ func (vld Validator) ValidateReader(r io.Reader) error {
 		case xml.Comment: // <!--...-->
 
 		case xml.ProcInst: // <?target inst?>
+			if !strings.EqualFold(v.Target, `xml`) {
+				return fmt.Errorf("%w: %s", ErrInvalidElement, v.Target)
+			}
 
 		case xml.Directive: // <!...> doctype etc
 			d := bytes.TrimSpace(v)
