@@ -139,8 +139,8 @@ func Test_Entity(t *testing.T) {
 ]>
 <svg><![CDATA[[&normal;]]></svg>`)
 	err = v.Validate(svg)
-	if err != nil {
-		t.Errorf("Unexptected error %v", err)
+	if err == nil {
+		t.Errorf("Expected validation error, got none")
 	}
 	svg = []byte(`<?xml version="1.0"?>
 <!DOCTYPE message [
