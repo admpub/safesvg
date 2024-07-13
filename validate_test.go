@@ -155,3 +155,15 @@ func Test_Entity(t *testing.T) {
 		t.Errorf("Expected validation error, got none")
 	}
 }
+
+func Test_NS(t *testing.T) {
+	svg := []byte(`<?xml version="1.0"?>
+	<svg width="480" height="102" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1">
+	<image x="0" y="0" width="480" height="102" xlink:href="data:image/png;base64,iVBORw0K" />
+	</svg>`)
+	v := NewValidator()
+	err := v.Validate(svg)
+	if err != nil {
+		t.Errorf("Unexptected error %v", err)
+	}
+}

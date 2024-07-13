@@ -176,8 +176,11 @@ func validateAttributes(attrs []xml.Attr, whiteListAttributes map[string]struct{
 	var err error
 	for _, attr := range attrs {
 		if len(attr.Name.Space) > 0 {
-			if attr.Name.Space == "http://www.w3.org/XML/1998/namespace" {
+			switch attr.Name.Space {
+			case "http://www.w3.org/XML/1998/namespace":
 				attr.Name.Space = "xml"
+			case "http://www.w3.org/1999/xlink":
+				attr.Name.Space = "xlink"
 			}
 			key = strings.ToLower(attr.Name.Local)
 			fn, ok := attrValueValidator[key]
