@@ -58,7 +58,7 @@ func (vld Validator) ValidateReader(r io.Reader) error {
 		elem  string
 		id    string
 		id4El string
-		usec  = map[string]*useRef{}
+		usec  = useRefs{}
 		root  = &useRef{}
 	)
 
@@ -77,18 +77,31 @@ func (vld Validator) ValidateReader(r io.Reader) error {
 			if ok := validateElements(elem, vld.whiteListElements); !ok {
 				return fmt.Errorf("%w: %s", ErrInvalidElement, v.Name.Local)
 			}
+			var _id, refID string
+			_id, refID, err = validateAttributes(v.Attr, vld.whiteListAttributes, vld.attrValueValidator)
+			if err != nil {
+				return err
+			}
 			parent, ok := usec[id]
 			if !ok {
 				parent = root
 			}
-			var _id string
-			_id, err = validateAttributes(v.Attr, vld.whiteListAttributes, vld.attrValueValidator, usec, parent)
-			if err != nil {
-				return err
-			}
 			if len(_id) > 0 {
 				id = _id
 				id4El = elem
+				usec.New(parent, id)
+			}
+			if elem == `use` {
+				if len(refID) == 0 {
+					parent = nil
+				}
+				if err = usec.Add(parent, refID, 1); err != nil {
+					return err
+				}
+				if parent == nil {
+					*root = *usec[refID]
+				}
+				//fmt.Printf("---------------------------->%+v\n", usec)
 			}
 		case xml.EndElement:
 			if id4El == elem {
@@ -189,30 +202,7 @@ func (vld *Validator) RemoveAttrValueValidator(attribute string) *Validator {
 	return vld
 }
 
-type useRef struct {
-	parent *useRef
-	count  uint64
-	id     string
-}
-
-const maxReferences uint64 = 50
-
-func (u *useRef) Add(n uint64) error {
-	u.count += n
-	if u.count > maxReferences {
-		return fmt.Errorf(`%w: more than %d`, ErrTooManyReferences, maxReferences)
-	}
-	if u.parent != nil {
-		return u.parent.Add(n)
-	}
-	return nil
-}
-
-func (u *useRef) String() string {
-	return fmt.Sprintf(`{"id":%q,"count":%d,"parent":%s}`, u.id, u.count, u.parent)
-}
-
-func validateAttributes(attrs []xml.Attr, whiteListAttributes map[string]struct{}, attrValueValidator map[string]func(string) error, usec map[string]*useRef, parent *useRef) (id string, err error) {
+func validateAttributes(attrs []xml.Attr, whiteListAttributes map[string]struct{}, attrValueValidator map[string]func(string) error) (id string, refID string, err error) {
 	var key string
 	for _, attr := range attrs {
 		if len(attr.Name.Space) > 0 {
@@ -231,24 +221,12 @@ func validateAttributes(attrs []xml.Attr, whiteListAttributes map[string]struct{
 			}
 			key = strings.ToLower(attr.Name.Space) + ":" + key
 			if strings.HasSuffix(key, `xlink:href`) && strings.HasPrefix(attr.Value, `#`) {
-				uk := strings.TrimPrefix(attr.Value, `#`)
-				ref, ok := usec[uk]
-				if !ok {
-					ref = &useRef{parent: parent, id: uk}
-					usec[uk] = ref
-				}
-				if err = ref.Add(1); err != nil {
-					return
-				}
+				refID = strings.TrimPrefix(attr.Value, `#`)
 			}
 		} else {
 			key = strings.ToLower(attr.Name.Local)
 			if key == `id` {
 				id = attr.Value
-				_, ok := usec[id]
-				if !ok {
-					usec[id] = &useRef{parent: parent, id: id}
-				}
 			}
 		}
 		_, found := whiteListAttributes[key]
