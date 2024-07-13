@@ -45,16 +45,22 @@ func (vld Validator) Validate(b []byte) error {
 }
 
 var (
-	entitySystemRegexp = regexp.MustCompile(`(?i)<!ENTITY(?:.*)SYSTEM`)
+	entitySystemRegexp = regexp.MustCompile(`(?i)<!ENTITY\b`)
 	doctypeBytes       = []byte(`DOCTYPE`)
 )
 
 // ValidateReader validates svg data from an io.Reader interface
 func (vld Validator) ValidateReader(r io.Reader) error {
 	t := xml.NewDecoder(r)
-	var to xml.Token
-	var err error
-	var elem string
+	var (
+		to    xml.Token
+		err   error
+		elem  string
+		id    string
+		id4El string
+		usec  = map[string]*useRef{}
+		root  = &useRef{}
+	)
 
 	for {
 		to, err = t.Token()
@@ -71,11 +77,23 @@ func (vld Validator) ValidateReader(r io.Reader) error {
 			if ok := validateElements(elem, vld.whiteListElements); !ok {
 				return fmt.Errorf("%w: %s", ErrInvalidElement, v.Name.Local)
 			}
-
-			if err = validateAttributes(v.Attr, vld.whiteListAttributes, vld.attrValueValidator); err != nil {
+			parent, ok := usec[id]
+			if !ok {
+				parent = root
+			}
+			var _id string
+			_id, err = validateAttributes(v.Attr, vld.whiteListAttributes, vld.attrValueValidator, usec, parent)
+			if err != nil {
 				return err
 			}
+			if len(_id) > 0 {
+				id = _id
+				id4El = elem
+			}
 		case xml.EndElement:
+			if id4El == elem {
+				id = ``
+			}
 			elem = ``
 			if ok := validateElements(strings.ToLower(v.Name.Local), vld.whiteListElements); !ok {
 				return fmt.Errorf("%w: %s", ErrInvalidElement, v.Name.Local)
@@ -171,9 +189,31 @@ func (vld *Validator) RemoveAttrValueValidator(attribute string) *Validator {
 	return vld
 }
 
-func validateAttributes(attrs []xml.Attr, whiteListAttributes map[string]struct{}, attrValueValidator map[string]func(string) error) error {
+type useRef struct {
+	parent *useRef
+	count  uint64
+	id     string
+}
+
+const maxReferences uint64 = 50
+
+func (u *useRef) Add(n uint64) error {
+	u.count += n
+	if u.count > maxReferences {
+		return fmt.Errorf(`%w: more than %d`, ErrTooManyReferences, maxReferences)
+	}
+	if u.parent != nil {
+		return u.parent.Add(n)
+	}
+	return nil
+}
+
+func (u *useRef) String() string {
+	return fmt.Sprintf(`{"id":%q,"count":%d,"parent":%s}`, u.id, u.count, u.parent)
+}
+
+func validateAttributes(attrs []xml.Attr, whiteListAttributes map[string]struct{}, attrValueValidator map[string]func(string) error, usec map[string]*useRef, parent *useRef) (id string, err error) {
 	var key string
-	var err error
 	for _, attr := range attrs {
 		if len(attr.Name.Space) > 0 {
 			switch attr.Name.Space {
@@ -186,16 +226,35 @@ func validateAttributes(attrs []xml.Attr, whiteListAttributes map[string]struct{
 			fn, ok := attrValueValidator[key]
 			if ok {
 				if err = fn(attr.Value); err != nil {
-					return err
+					return
 				}
 			}
 			key = strings.ToLower(attr.Name.Space) + ":" + key
+			if strings.HasSuffix(key, `xlink:href`) && strings.HasPrefix(attr.Value, `#`) {
+				uk := strings.TrimPrefix(attr.Value, `#`)
+				ref, ok := usec[uk]
+				if !ok {
+					ref = &useRef{parent: parent, id: uk}
+					usec[uk] = ref
+				}
+				if err = ref.Add(1); err != nil {
+					return
+				}
+			}
 		} else {
 			key = strings.ToLower(attr.Name.Local)
+			if key == `id` {
+				id = attr.Value
+				_, ok := usec[id]
+				if !ok {
+					usec[id] = &useRef{parent: parent, id: id}
+				}
+			}
 		}
 		_, found := whiteListAttributes[key]
 		if !found {
-			return fmt.Errorf("%w: %s", ErrInvalidAttribute, key)
+			err = fmt.Errorf("%w: %s", ErrInvalidAttribute, key)
+			return
 		}
 		fn, ok := attrValueValidator[key]
 		if ok {
@@ -204,10 +263,10 @@ func validateAttributes(attrs []xml.Attr, whiteListAttributes map[string]struct{
 			err = validateAttrValue(attr.Value)
 		}
 		if err != nil {
-			return err
+			return
 		}
 	}
-	return err
+	return
 }
 
 func validateElements(elm string, whiteListElements map[string]struct{}) bool {

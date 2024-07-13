@@ -3,10 +3,11 @@ package safesvg
 import "errors"
 
 var (
-	ErrInvalidElement              = errors.New("invalid element")
-	ErrInvalidAttribute            = errors.New("invalid attribute")
-	ErrUnallowedCSSAttributeValue  = errors.New("unallowed css attribute value")
-	ErrUnallowedCSSAttribute       = errors.New("unallowed css attribute")
-	ErrUnallowedHrefAttributeValue = errors.New("unallowed href attribute value")
-	ErrUnallowedEntityAttribute    = errors.New("unallowed entity attribute")
+	ErrInvalidElement              = errors.New("[svg] invalid element")
+	ErrInvalidAttribute            = errors.New("[svg] invalid attribute")
+	ErrUnallowedCSSAttributeValue  = errors.New("[svg] unallowed css attribute value")
+	ErrUnallowedCSSAttribute       = errors.New("[svg] unallowed css attribute")
+	ErrUnallowedHrefAttributeValue = errors.New("[svg] unallowed href attribute value")
+	ErrUnallowedEntityAttribute    = errors.New("[svg] unallowed entity attribute")
+	ErrTooManyReferences           = errors.New("[svg] too many references")
 )
