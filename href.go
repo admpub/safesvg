@@ -7,7 +7,7 @@ import (
 )
 
 var hrefDataRegex = regexp.MustCompile(`(?i)^\s*[^/]+/[^/;]+\s*;\s*`)
-var hrefDataMimes = []string{`image/png`, `image/jpg`, `image/jpeg`}
+var hrefDataMimes = []string{`image/png`, `image/jpg`, `image/jpeg`, `image/pjpeg`, `image/gif`}
 
 func validateHref(value string) error {
 	value = strings.TrimSpace(value)
