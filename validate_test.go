@@ -104,12 +104,21 @@ func Test_SVGBomb(t *testing.T) {
 	<g id="a">
 	<use/><use/><use/><use/><use/><use/><use/><use/><use/><use/>
 	</g>
-	<g id="b"><use xlink:href="#a"/><use xlink:href="#a"/><use xlink:href="#a"/><use xlink:href="#a"/><use xlink:href="#a"/><use xlink:href="#a"/><use xlink:href="#a"/><use xlink:href="#a"/><use xlink:href="#a"/><use xlink:href="#a"/></g>
-	<g id="c"><use xlink:href="#b"/><use xlink:href="#b"/><use xlink:href="#b"/><use xlink:href="#b"/><use xlink:href="#b"/></g>
+	<use xlink:href="#a"/><use xlink:href="#a"/><use xlink:href="#a"/><use xlink:href="#a"/><use xlink:href="#a"/>
 	</svg>`)
 	err = v.Validate(svg)
 	if err != nil {
 		t.Errorf("Unexptected error %v", err)
+	}
+	svg = []byte(`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+	<g id="a">
+	<use/><use/><use/><use/><use/><use/><use/><use/><use/><use/>
+	</g>
+	<use xlink:href="#a"/><use xlink:href="#a"/><use xlink:href="#a"/><use xlink:href="#a"/><use xlink:href="#a"/><use xlink:href="#a"/>
+	</svg>`)
+	err = v.Validate(svg)
+	if err == nil {
+		t.Errorf("Expected validation error, got none")
 	}
 	svg = []byte(`<?xml version="1.0"?>
 <!DOCTYPE lolz [
